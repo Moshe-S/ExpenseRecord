@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Ignore IDE-specific stuff
+/.idea/dictionaries
