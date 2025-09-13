@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    kotlin("kapt")
 }
 
 android {
@@ -39,6 +40,12 @@ android {
     buildFeatures {
         compose = true
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
@@ -51,7 +58,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation("androidx.compose.ui:ui-text")
-
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.foundation)
 
@@ -64,4 +70,19 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+
+    // Room
+    implementation("androidx.room:room-runtime:2.8.0")
+    implementation("androidx.room:room-ktx:2.8.0")
+    kapt("androidx.room:room-compiler:2.8.0")
+
+    // Lifecycle VM
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
+
+    // SQLCipher
+    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
+
+    // EncryptedSharedPreferences
+    implementation("androidx.security:security-crypto:1.1.0")
 }
