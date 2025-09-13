@@ -20,18 +20,19 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-// Material3 pickers (inside AlertDialog for wide compatibility)
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 
 data class UiTxn(
+    val id: Long = 0L,
     val occurredAt: LocalDateTime,
     val category: String,
     val amount: Double,
@@ -48,30 +49,24 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BudgetScreen() {
-    // form state
+fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     var category by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
 
-    // date/time pick state
     var pickedDate by remember { mutableStateOf(LocalDate.now()) }
     var pickedTime by remember { mutableStateOf(LocalTime.now().withSecond(0).withNano(0)) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var dateTimeChangedManually by remember { mutableStateOf(false) }
 
-    // dialogs
     var futureWarn: Pair<LocalDateTime, (() -> Unit)?>? by remember { mutableStateOf(null) }
 
-    // list state
-    var txns by remember { mutableStateOf(listOf<UiTxn>()) }
-
+    val txns by vm.txns.collectAsState()
     val focus = LocalFocusManager.current
     val tsFmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
 
-    // filtering
     val filtered = remember(txns, query) {
         val q = query.trim().lowercase()
         if (q.isEmpty()) txns
@@ -89,7 +84,7 @@ fun BudgetScreen() {
 
         val occurred = LocalDateTime.of(pickedDate, pickedTime)
         val commit: () -> Unit = {
-            txns = listOf(
+            vm.add(
                 UiTxn(
                     occurredAt = occurred,
                     category = category.trim(),
@@ -97,8 +92,7 @@ fun BudgetScreen() {
                     title = title.takeIf { it.isNotBlank() },
                     manuallySetDateTime = dateTimeChangedManually
                 )
-            ) + txns
-            // reset only fields that make sense; keep date/time as last used
+            )
             amount = ""
             title = ""
             focus.clearFocus()
@@ -125,7 +119,6 @@ fun BudgetScreen() {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Row 1: Category + Title
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = category,
@@ -147,12 +140,10 @@ fun BudgetScreen() {
                 )
             }
 
-            // Row 2: Amount + Add
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { input ->
-                        // allow digits and a single dot; comma becomes dot
                         val s = input.replace(',', '.')
                         val cleaned = s.filter { it.isDigit() || it == '.' }
                         val firstDot = cleaned.indexOf('.')
@@ -180,7 +171,6 @@ fun BudgetScreen() {
                 ) { Text("Add") }
             }
 
-            // Row 3: Date/Time + Change + indicator
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val preview = LocalDateTime.of(pickedDate, pickedTime).format(tsFmt)
                 OutlinedTextField(
@@ -203,7 +193,6 @@ fun BudgetScreen() {
 
             HorizontalDivider()
 
-            // Search
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -214,12 +203,10 @@ fun BudgetScreen() {
                 keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
             )
 
-            // Total
             Text("Total: ${"%.2f".format(total)}", style = MaterialTheme.typography.titleMedium)
 
-            // List
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(filtered) { t ->
+                items(filtered, key = { it.id }) { t ->
                     val line = buildString {
                         append(t.occurredAt.format(tsFmt))
                         if (t.manuallySetDateTime) append(" 🛈")
@@ -229,13 +216,15 @@ fun BudgetScreen() {
                         append("%.2f".format(t.amount))
                         t.title?.let { append(" • ").append(it) }
                     }
-                    Text(line)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(line, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { vm.delete(t.id) }) { Text("Delete") }
+                    }
                 }
             }
         }
     }
 
-    // DatePicker (AlertDialog host)
     if (showDatePicker) {
         AlertDialog(
             onDismissRequest = { showDatePicker = false },
@@ -266,7 +255,6 @@ fun BudgetScreen() {
         )
     }
 
-    // TimePicker (AlertDialog host)
     if (showTimePicker) {
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
@@ -288,7 +276,6 @@ fun BudgetScreen() {
         )
     }
 
-    // Future warning dialog
     futureWarn?.let { (whenPicked, onConfirm) ->
         AlertDialog(
             onDismissRequest = { futureWarn = null },
