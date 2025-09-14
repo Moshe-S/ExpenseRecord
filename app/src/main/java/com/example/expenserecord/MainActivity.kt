@@ -25,7 +25,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.TimePicker
@@ -36,6 +37,7 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.ui.text.input.TextFieldValue
 
 
 data class UiTxn(
@@ -57,7 +59,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetScreen(vm: TxnViewModel = viewModel()) {
-    var category by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf(TextFieldValue("")) }
     var title by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
@@ -90,14 +92,14 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     fun addIfValid() {
         val normalized = amount.replace(',', '.')
         val a = normalized.toDoubleOrNull()
-        if (category.isBlank() || a == null || a <= 0.0) return
+        if (category.text.isBlank() || a == null || a <= 0.0) return
 
         val occurred = LocalDateTime.of(pickedDate, pickedTime)
         val commit: () -> Unit = {
             vm.add(
                 UiTxn(
                     occurredAt = occurred,
-                    category = category.trim(),
+                    category = category.text.trim(),
                     amount = a,
                     title = title.takeIf { it.isNotBlank() },
                     manuallySetDateTime = dateTimeChangedManually
@@ -136,11 +138,19 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     value = category,
                     onValueChange = { category = it },
                     label = { Text("Category") },
-                    modifier = Modifier.weight(1f).handleTabNext(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .handleTabNext()
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                category = category.copy(selection = TextRange(0, category.text.length))
+                            }
+                        },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) })
                 )
+
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
