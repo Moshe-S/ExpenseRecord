@@ -4,6 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
+import androidx.room.Update
+
 
 @Dao
 interface TxnDao {
@@ -15,4 +17,8 @@ interface TxnDao {
 
     @Query("SELECT * FROM txns ORDER BY occurredAtEpochMillis DESC")
     fun all(): Flow<List<TxnEntity>>
+
+    @Update
+    suspend fun update(entity: TxnEntity)
+
 }
