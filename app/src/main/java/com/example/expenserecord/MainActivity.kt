@@ -25,11 +25,20 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.ui.text.input.TextFieldValue
+
 
 data class UiTxn(
     val id: Long = 0L,
@@ -50,7 +59,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetScreen(vm: TxnViewModel = viewModel()) {
-    var category by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf(TextFieldValue("")) }
     var title by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
@@ -66,6 +75,9 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     val txns by vm.txns.collectAsState()
     val focus = LocalFocusManager.current
     val tsFmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
 
     val filtered = remember(txns, query) {
         val q = query.trim().lowercase()
@@ -80,14 +92,14 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     fun addIfValid() {
         val normalized = amount.replace(',', '.')
         val a = normalized.toDoubleOrNull()
-        if (category.isBlank() || a == null || a <= 0.0) return
+        if (category.text.isBlank() || a == null || a <= 0.0) return
 
         val occurred = LocalDateTime.of(pickedDate, pickedTime)
         val commit: () -> Unit = {
             vm.add(
                 UiTxn(
                     occurredAt = occurred,
-                    category = category.trim(),
+                    category = category.text.trim(),
                     amount = a,
                     title = title.takeIf { it.isNotBlank() },
                     manuallySetDateTime = dateTimeChangedManually
@@ -111,7 +123,9 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
         }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Expense Record") }) }
+        topBar = { TopAppBar(title = { Text("Expense Record") }) },
+                snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+
     ) { padding ->
         Column(
             Modifier
@@ -124,11 +138,19 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     value = category,
                     onValueChange = { category = it },
                     label = { Text("Category") },
-                    modifier = Modifier.weight(1f).handleTabNext(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .handleTabNext()
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                category = category.copy(selection = TextRange(0, category.text.length))
+                            }
+                        },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) })
                 )
+
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -218,7 +240,33 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(line, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { vm.delete(t.id) }) { Text("Delete") }
+                        TextButton(onClick = {
+                            val deleted = t
+                            vm.rememberDeleted(
+                                UiTxn(
+                                    id = deleted.id,
+                                    occurredAt = deleted.occurredAt,
+                                    category = deleted.category,
+                                    amount = deleted.amount,
+                                    title = deleted.title,
+                                    manuallySetDateTime = deleted.manuallySetDateTime
+                                )
+                            )
+                            scope.launch {
+                                vm.delete(deleted.id)
+                                val result = snackbarHostState.showSnackbar(
+                                    message = "Deleted",
+                                    actionLabel = "Undo",
+                                    duration = SnackbarDuration.Short
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    vm.restoreLastDeleted()
+                                }
+                            }
+                        }) {
+                            Text("Delete")
+                        }
+
                     }
                 }
             }

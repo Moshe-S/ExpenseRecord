@@ -18,15 +18,32 @@ class TxnViewModel : ViewModel() {
         .map { list -> list.map { it.toUi() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Add (used everywhere, including Undo)
     fun add(ui: UiTxn) {
         viewModelScope.launch {
             dao.insert(ui.toEntity())
         }
     }
 
+    // Delete by ID (matches your current DAO: deleteById)
     fun delete(id: Long) {
         viewModelScope.launch {
             dao.deleteById(id)
+        }
+    }
+
+    // Keep last deleted (for Snackbar Undo)
+    var recentlyDeleted: UiTxn? = null
+        private set
+
+    fun rememberDeleted(ui: UiTxn) {
+        recentlyDeleted = ui
+    }
+
+    fun restoreLastDeleted() {
+        viewModelScope.launch {
+            recentlyDeleted?.let { add(it) }
+            recentlyDeleted = null
         }
     }
 }
@@ -45,7 +62,7 @@ private fun TxnEntity.toUi(): UiTxn =
 
 private fun UiTxn.toEntity(): TxnEntity =
     TxnEntity(
-        id = 0, // Room will auto-generate ID on insert
+        id = 0, // auto-generate on insert
         occurredAtEpochMillis = occurredAt.atZone(ZoneId.systemDefault())
             .toInstant().toEpochMilli(),
         category = category,
