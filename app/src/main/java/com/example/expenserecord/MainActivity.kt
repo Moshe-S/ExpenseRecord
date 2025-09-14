@@ -3,42 +3,69 @@ package com.example.expenserecord
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-import androidx.compose.ui.text.input.TextFieldValue
-
 
 data class UiTxn(
     val id: Long = 0L,
@@ -78,7 +105,10 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // observe editing state
+    val editing by vm.editing.collectAsState()
 
+    // filter + total
     val filtered = remember(txns, query) {
         val q = query.trim().lowercase()
         if (q.isEmpty()) txns
@@ -114,6 +144,19 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
         } else commit()
     }
 
+    // prefill when entering edit mode
+    LaunchedEffect(editing?.id) {
+        editing?.let { tx ->
+            category = TextFieldValue(tx.category)
+            title = tx.title ?: ""
+            amount = tx.amount.toString()
+            val dt = tx.occurredAt
+            pickedDate = dt.toLocalDate()
+            pickedTime = dt.toLocalTime().withSecond(0).withNano(0)
+            dateTimeChangedManually = tx.manuallySetDateTime
+        }
+    }
+
     fun Modifier.handleTabNext(): Modifier =
         this.onPreviewKeyEvent { e ->
             if (e.type == KeyEventType.KeyUp && e.key == Key.Tab) {
@@ -124,8 +167,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Expense Record") }) },
-                snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
-
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
         Column(
             Modifier
@@ -143,7 +185,9 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         .handleTabNext()
                         .onFocusChanged { focusState ->
                             if (focusState.isFocused) {
-                                category = category.copy(selection = TextRange(0, category.text.length))
+                                category = category.copy(
+                                    selection = TextRange(0, category.text.length)
+                                )
                             }
                         },
                     singleLine = true,
@@ -179,7 +223,8 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     modifier = Modifier
                         .weight(1f)
                         .onPreviewKeyEvent { e ->
-                            if (e.type == KeyEventType.KeyUp &&
+                            if (
+                                e.type == KeyEventType.KeyUp &&
                                 (e.key == Key.Enter || e.key == Key.NumPadEnter)
                             ) { addIfValid(); true } else false
                         },
@@ -187,10 +232,55 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { addIfValid() })
                 )
-                Button(
-                    onClick = { addIfValid() },
-                    modifier = Modifier.height(56.dp)
-                ) { Text("Add") }
+
+                if (editing == null) {
+                    Button(
+                        onClick = { addIfValid() },
+                        modifier = Modifier.height(56.dp)
+                    ) { Text("Add") }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                val normalized = amount.replace(',', '.')
+                                val a = normalized.toDoubleOrNull() ?: return@Button
+                                val occurred = LocalDateTime.of(pickedDate, pickedTime)
+                                val currentId = vm.editing.value?.id ?: return@Button
+
+                                val updated = UiTxn(
+                                    id = currentId,
+                                    occurredAt = occurred,
+                                    category = category.text.trim(),
+                                    amount = a,
+                                    title = title.takeIf { it.isNotBlank() },
+                                    manuallySetDateTime = dateTimeChangedManually
+                                )
+
+                                vm.saveEdit(updated)
+
+                                // reset UI after save
+                                category = TextFieldValue("")
+                                title = ""
+                                amount = ""
+                                dateTimeChangedManually = false
+                                focus.clearFocus()
+                            },
+                            modifier = Modifier.height(56.dp)
+                        ) { Text("Save") }
+
+                        TextButton(
+                            onClick = {
+                                vm.cancelEdit()
+                                category = TextFieldValue("")
+                                title = ""
+                                amount = ""
+                                dateTimeChangedManually = false
+                                focus.clearFocus()
+                            },
+                            modifier = Modifier.height(56.dp)
+                        ) { Text("Cancel") }
+                    }
+                }
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -198,12 +288,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 OutlinedTextField(
                     value = preview,
                     onValueChange = {},
-                    label = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Date/Time")
-                            if (dateTimeChangedManually) Text("🛈", style = MaterialTheme.typography.labelSmall)
-                        }
-                    },
+                    label = { Text("Date/Time") },
                     readOnly = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -225,8 +310,16 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
             )
 
-            Text("Total: ${"%.2f".format(total)}", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Total: ${"%.2f".format(total)}",
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium
+            )
 
+            // BottomSheet state
+            var showActionSheet by remember { mutableStateOf(false) }
+            var selectedTxn: UiTxn? by remember { mutableStateOf(null) }
+
+            // List
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(filtered, key = { it.id }) { t ->
                     val line = buildString {
@@ -238,10 +331,57 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         append("%.2f".format(t.amount))
                         t.title?.let { append(" • ").append(it) }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {},
+                                onLongClick = {
+                                    selectedTxn = t
+                                    showActionSheet = true
+                                }
+                            ),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Text(line, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+
+            // BottomSheet (single instance, outside the list)
+            if (showActionSheet) {
+                ModalBottomSheet(onDismissRequest = { showActionSheet = false }) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Centered X at the top
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            IconButton(onClick = { showActionSheet = false }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close"
+                                )
+                            }
+                        }
+
+                        // Edit: begin editing and close sheet
                         TextButton(onClick = {
-                            val deleted = t
+                            selectedTxn?.let { vm.beginEdit(it) }
+                            showActionSheet = false
+                        }) { Text("Edit") }
+
+                        // Delete: with Undo
+                        TextButton(onClick = {
+                            val deleted = selectedTxn ?: return@TextButton
                             vm.rememberDeleted(
                                 UiTxn(
                                     id = deleted.id,
@@ -252,6 +392,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                                     manuallySetDateTime = deleted.manuallySetDateTime
                                 )
                             )
+                            showActionSheet = false
                             scope.launch {
                                 vm.delete(deleted.id)
                                 val result = snackbarHostState.showSnackbar(
@@ -263,10 +404,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                                     vm.restoreLastDeleted()
                                 }
                             }
-                        }) {
-                            Text("Delete")
-                        }
-
+                        }) { Text("Delete") }
                     }
                 }
             }
