@@ -3,6 +3,8 @@ package com.example.expenserecord
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
@@ -52,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -59,9 +63,12 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
@@ -69,7 +76,6 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.clickable
 
 data class UiTxn(
     val id: Long = 0L,
@@ -79,6 +85,18 @@ data class UiTxn(
     val title: String?,
     val manuallySetDateTime: Boolean
 )
+
+/** Short vertical separator with fixed height */
+@Composable
+private fun VSep(heightDp: Int = 20) {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 8.dp) // breathing room from text
+            .width(1.dp)
+            .height(heightDp.dp)
+            .background(Color.Black.copy(alpha = 0.25f))
+    )
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -106,7 +124,11 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
     val txns by vm.txns.collectAsState()
     val focus = LocalFocusManager.current
-    val tsFmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
+
+    val tsFmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") } // for preview field
+    val dateFmt = remember { DateTimeFormatter.ofPattern("dd MMM") }         // "24 Sep"
+    val timeFmt = remember { DateTimeFormatter.ofPattern("HH:mm") }          // "23:59"
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -181,6 +203,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Inputs row 1: Category + Details
             Column {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(modifier = Modifier.weight(1f)) {
@@ -209,10 +232,10 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             if (category.text.isBlank()) {
                                 recentCategories.take(5)
                             } else {
-                                val query = category.text.trim().lowercase()
-                                val recentMatches = recentCategories.filter { it.lowercase().contains(query) }
+                                val q = category.text.trim().lowercase()
+                                val recentMatches = recentCategories.filter { it.lowercase().contains(q) }
                                 val otherMatches = recentCategories
-                                    .filter { it.lowercase().contains(query) && it !in recentMatches }
+                                    .filter { it.lowercase().contains(q) && it !in recentMatches }
                                     .sortedBy { it.lowercase() }
                                 (recentMatches + otherMatches).take(5)
                             }
@@ -256,6 +279,8 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     )
                 }
             }
+
+            // Inputs row 2: Amount + Add/Save/Cancel
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = amount,
@@ -332,6 +357,8 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     }
                 }
             }
+
+            // Date/time preview + change button
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val preview = LocalDateTime.of(pickedDate, pickedTime).format(tsFmt)
                 OutlinedTextField(
@@ -349,6 +376,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
             HorizontalDivider()
 
+            // Search
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -359,11 +387,13 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
             )
 
+            // Total
             Text(
                 "Total: ${"%.2f".format(total)}",
                 style = MaterialTheme.typography.titleMedium
             )
 
+            // Month controls
             val currentMonth by vm.currentMonth.collectAsState()
             val canGoNext = vm.canGoToNextMonth()
 
@@ -372,39 +402,90 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(onClick = { vm.goToPreviousMonth() }) {
-                    Text("← Previous")
-                }
+                Button(onClick = { vm.goToPreviousMonth() }) { Text("← Previous") }
                 Text(
                     currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
                     style = MaterialTheme.typography.titleMedium
                 )
-                Button(
-                    onClick = { vm.goToNextMonth() },
-                    enabled = canGoNext
-                ) {
-                    Text("Next →")
-                }
+                Button(onClick = { vm.goToNextMonth() }, enabled = canGoNext) { Text("Next →") }
             }
 
-            // Table header
+            // ===== Table header =====
             Row(
-                Modifier
+                modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(top = 8.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Date/Time", modifier = Modifier.weight(2f))
-                Text("Category", modifier = Modifier.weight(2f))
-                Text("Amount", modifier = Modifier.weight(1f))
-                Text("Details", modifier = Modifier.weight(2f))
+                Text(
+                    "Date",
+                    modifier = Modifier
+                        .width(54.dp)
+                        .padding(horizontal = 6.dp),
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip
+                )
+                VSep(20)
+
+                Text(
+                    "Time",
+                    modifier = Modifier
+                        .width(46.dp)
+                        .padding(horizontal = 6.dp),
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip
+                )
+                VSep(20)
+
+                Text(
+                    "Category",
+                    modifier = Modifier
+                        .weight(38f)
+                        .padding(horizontal = 6.dp),
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                VSep(20)
+
+                Text(
+                    "Spent",
+                    modifier = Modifier
+                        .weight(24f)
+                        .padding(horizontal = 6.dp),
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip
+                )
+                VSep(20)
+
+                Text(
+                    "Details",
+                    modifier = Modifier
+                        .weight(36f)
+                        .padding(horizontal = 6.dp),
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
+
+            // underline under header
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 1.dp,
+                color = Color.Black.copy(alpha = 0.25f)
+            )
 
             var showActionSheet by remember { mutableStateOf(false) }
             var selectedTxn: UiTxn? by remember { mutableStateOf(null) }
 
-            // Table rows
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // ===== Table rows =====
+            LazyColumn {
                 items(filtered, key = { it.id }) { t ->
                     Row(
                         modifier = Modifier
@@ -418,24 +499,58 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                                     showActionSheet = true
                                 }
                             )
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = t.occurredAt.format(tsFmt) + if (t.manuallySetDateTime) " 🛈" else "",
-                            modifier = Modifier.weight(2f)
+                            text = t.occurredAt.format(dateFmt),
+                            modifier = Modifier
+                                .width(54.dp)
+                                .padding(horizontal = 6.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip
                         )
+                        VSep(28)
+
+                        Text(
+                            text = t.occurredAt.format(timeFmt) + if (t.manuallySetDateTime) " 🛈" else "",
+                            modifier = Modifier
+                                .width(46.dp)
+                                .padding(horizontal = 6.dp),
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip
+                        )
+                        VSep(28)
+
                         Text(
                             text = t.category,
-                            modifier = Modifier.weight(2f)
+                            modifier = Modifier
+                                .weight(38f)
+                                .padding(horizontal = 6.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        VSep(28)
+
                         Text(
                             text = "%.2f".format(t.amount),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(24f)
+                                .padding(horizontal = 6.dp),
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip
                         )
+                        VSep(28)
+
                         Text(
                             text = t.title ?: "",
-                            modifier = Modifier.weight(2f)
+                            modifier = Modifier
+                                .weight(36f)
+                                .padding(horizontal = 6.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -521,12 +636,8 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     if (showTimePicker) {
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
-            confirmButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
-            },
+            confirmButton = { TextButton(onClick = { showTimePicker = false }) { Text("OK") } },
+            dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Cancel") } },
             text = {
                 val init = pickedTime
                 val state = rememberTimePickerState(init.hour, init.minute, is24Hour = true)
@@ -548,9 +659,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     futureWarn = null
                 }) { Text("Continue") }
             },
-            dismissButton = {
-                TextButton(onClick = { futureWarn = null }) { Text("Cancel") }
-            },
+            dismissButton = { TextButton(onClick = { futureWarn = null }) { Text("Cancel") } },
             title = { Text("Future date") },
             text = { Text("Selected time (${whenPicked.format(tsFmt)}) is in the future. Are you sure?") }
         )
