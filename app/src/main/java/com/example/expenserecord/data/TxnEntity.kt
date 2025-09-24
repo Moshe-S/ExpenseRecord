@@ -12,3 +12,10 @@ data class TxnEntity(
     val title: String?,
     val manuallySetDateTime: Boolean
 )
+
+@Entity(tableName = "categories")
+data class CategoryEntity(
+    @PrimaryKey val name: String,
+    val lastUsed: Long,
+    val usageCount: Int
+)

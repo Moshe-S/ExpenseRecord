@@ -20,11 +20,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -58,6 +60,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -66,6 +69,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.clickable
 
 data class UiTxn(
     val id: Long = 0L,
@@ -90,6 +94,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     var title by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
+    var focusedField by remember { mutableStateOf<String?>(null) }
 
     var pickedDate by remember { mutableStateOf(LocalDate.now()) }
     var pickedTime by remember { mutableStateOf(LocalTime.now().withSecond(0).withNano(0)) }
@@ -105,10 +110,8 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // observe editing state
     val editing by vm.editing.collectAsState()
 
-    // filter + total
     val filtered = remember(txns, query) {
         val q = query.trim().lowercase()
         if (q.isEmpty()) txns
@@ -135,16 +138,19 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     manuallySetDateTime = dateTimeChangedManually
                 )
             )
+            vm.addCategoryToHistory(category.text.trim())
             amount = ""
             title = ""
             focus.clearFocus()
+            pickedDate = LocalDate.now()
+            pickedTime = LocalTime.now().withSecond(0).withNano(0)
+            dateTimeChangedManually = false
         }
         if (occurred.isAfter(LocalDateTime.now())) {
             futureWarn = occurred to commit
         } else commit()
     }
 
-    // prefill when entering edit mode
     LaunchedEffect(editing?.id) {
         editing?.let { tx ->
             category = TextFieldValue(tx.category)
@@ -175,37 +181,81 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("Category") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .handleTabNext()
-                        .onFocusChanged { focusState ->
-                            if (focusState.isFocused) {
-                                category = category.copy(
-                                    selection = TextRange(0, category.text.length)
-                                )
+            Column {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        OutlinedTextField(
+                            value = category,
+                            onValueChange = { category = it },
+                            label = { Text("Category") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .handleTabNext()
+                                .onFocusChanged { focusState ->
+                                    focusedField = if (focusState.isFocused) "category" else null
+                                    if (focusState.isFocused) {
+                                        category = category.copy(
+                                            selection = TextRange(0, category.text.length)
+                                        )
+                                    }
+                                },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) })
+                        )
+
+                        val recentCategories by vm.recentCategories.collectAsState()
+                        val suggestions = remember(category.text, recentCategories) {
+                            if (category.text.isBlank()) {
+                                recentCategories.take(5)
+                            } else {
+                                val query = category.text.trim().lowercase()
+                                val recentMatches = recentCategories.filter { it.lowercase().contains(query) }
+                                val otherMatches = recentCategories
+                                    .filter { it.lowercase().contains(query) && it !in recentMatches }
+                                    .sortedBy { it.lowercase() }
+                                (recentMatches + otherMatches).take(5)
                             }
-                        },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) })
-                )
+                        }
 
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Details (optional)") },
-                    modifier = Modifier.weight(1f).handleTabNext(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) })
-                )
+                        if (suggestions.isNotEmpty() && focusedField == "category") {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 60.dp)
+                            ) {
+                                LazyColumn(modifier = Modifier.height(120.dp)) {
+                                    items(suggestions) { categoryName ->
+                                        Text(
+                                            text = categoryName,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    category = TextFieldValue(categoryName)
+                                                    focusedField = null
+                                                    focus.moveFocus(FocusDirection.Next)
+                                                }
+                                                .padding(12.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("Details (optional)") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .handleTabNext(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) })
+                    )
+                }
             }
-
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = amount,
@@ -229,7 +279,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             ) { addIfValid(); true } else false
                         },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, keyboardType = KeyboardType.Number),
                     keyboardActions = KeyboardActions(onDone = { addIfValid() })
                 )
 
@@ -257,13 +307,13 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                                 )
 
                                 vm.saveEdit(updated)
-
-                                // reset UI after save
                                 category = TextFieldValue("")
                                 title = ""
                                 amount = ""
                                 dateTimeChangedManually = false
                                 focus.clearFocus()
+                                pickedDate = LocalDate.now()
+                                pickedTime = LocalTime.now().withSecond(0).withNano(0)
                             },
                             modifier = Modifier.height(56.dp)
                         ) { Text("Save") }
@@ -282,13 +332,12 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     }
                 }
             }
-
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val preview = LocalDateTime.of(pickedDate, pickedTime).format(tsFmt)
                 OutlinedTextField(
                     value = preview,
                     onValueChange = {},
-                    label = { Text("Date/Time") },
+                    label = { Text("Date/Time${if (dateTimeChangedManually) " 🛈" else ""}") },
                     readOnly = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -312,26 +361,51 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
             Text(
                 "Total: ${"%.2f".format(total)}",
-                style = androidx.compose.material3.MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium
             )
 
-            // BottomSheet state
+            val currentMonth by vm.currentMonth.collectAsState()
+            val canGoNext = vm.canGoToNextMonth()
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(onClick = { vm.goToPreviousMonth() }) {
+                    Text("← Previous")
+                }
+                Text(
+                    currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Button(
+                    onClick = { vm.goToNextMonth() },
+                    enabled = canGoNext
+                ) {
+                    Text("Next →")
+                }
+            }
+
+            // Table header
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Date/Time", modifier = Modifier.weight(2f))
+                Text("Category", modifier = Modifier.weight(2f))
+                Text("Amount", modifier = Modifier.weight(1f))
+                Text("Details", modifier = Modifier.weight(2f))
+            }
+
             var showActionSheet by remember { mutableStateOf(false) }
             var selectedTxn: UiTxn? by remember { mutableStateOf(null) }
 
-            // List
+            // Table rows
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(filtered, key = { it.id }) { t ->
-                    val line = buildString {
-                        append(t.occurredAt.format(tsFmt))
-                        if (t.manuallySetDateTime) append(" 🛈")
-                        append(" • ")
-                        append(t.category)
-                        append(" • ")
-                        append("%.2f".format(t.amount))
-                        t.title?.let { append(" • ").append(it) }
-                    }
-
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -343,15 +417,30 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                                     selectedTxn = t
                                     showActionSheet = true
                                 }
-                            ),
+                            )
+                            .padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(line, modifier = Modifier.weight(1f))
+                        Text(
+                            text = t.occurredAt.format(tsFmt) + if (t.manuallySetDateTime) " 🛈" else "",
+                            modifier = Modifier.weight(2f)
+                        )
+                        Text(
+                            text = t.category,
+                            modifier = Modifier.weight(2f)
+                        )
+                        Text(
+                            text = "%.2f".format(t.amount),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = t.title ?: "",
+                            modifier = Modifier.weight(2f)
+                        )
                     }
                 }
             }
 
-            // BottomSheet (single instance, outside the list)
             if (showActionSheet) {
                 ModalBottomSheet(onDismissRequest = { showActionSheet = false }) {
                     Column(
@@ -360,7 +449,6 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Centered X at the top
                         Box(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center
@@ -373,25 +461,14 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             }
                         }
 
-                        // Edit: begin editing and close sheet
                         TextButton(onClick = {
                             selectedTxn?.let { vm.beginEdit(it) }
                             showActionSheet = false
                         }) { Text("Edit") }
 
-                        // Delete: with Undo
                         TextButton(onClick = {
                             val deleted = selectedTxn ?: return@TextButton
-                            vm.rememberDeleted(
-                                UiTxn(
-                                    id = deleted.id,
-                                    occurredAt = deleted.occurredAt,
-                                    category = deleted.category,
-                                    amount = deleted.amount,
-                                    title = deleted.title,
-                                    manuallySetDateTime = deleted.manuallySetDateTime
-                                )
-                            )
+                            vm.rememberDeleted(deleted)
                             showActionSheet = false
                             scope.launch {
                                 vm.delete(deleted.id)

@@ -20,5 +20,7 @@ interface TxnDao {
 
     @Update
     suspend fun update(entity: TxnEntity)
+    @Query("SELECT * FROM txns WHERE occurredAtEpochMillis >= :startMillis AND occurredAtEpochMillis <= :endMillis ORDER BY occurredAtEpochMillis DESC")
+    fun getByDateRange(startMillis: Long, endMillis: Long): Flow<List<TxnEntity>>
 
 }
