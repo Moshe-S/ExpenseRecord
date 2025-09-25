@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,7 +22,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
@@ -53,6 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -308,71 +312,104 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     keyboardActions = KeyboardActions(onDone = { addIfValid() })
                 )
 
-                if (editing == null) {
-                    Button(
-                        onClick = { addIfValid() },
-                        modifier = Modifier.height(56.dp)
-                    ) { Text("Add") }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                val normalized = amount.replace(',', '.')
-                                val a = normalized.toDoubleOrNull() ?: return@Button
-                                val occurred = LocalDateTime.of(pickedDate, pickedTime)
-                                val currentId = vm.editing.value?.id ?: return@Button
 
-                                val updated = UiTxn(
-                                    id = currentId,
-                                    occurredAt = occurred,
-                                    category = category.text.trim(),
-                                    amount = a,
-                                    title = title.takeIf { it.isNotBlank() },
-                                    manuallySetDateTime = dateTimeChangedManually
-                                )
-
-                                vm.saveEdit(updated)
-                                category = TextFieldValue("")
-                                title = ""
-                                amount = ""
-                                dateTimeChangedManually = false
-                                focus.clearFocus()
-                                pickedDate = LocalDate.now()
-                                pickedTime = LocalTime.now().withSecond(0).withNano(0)
-                            },
-                            modifier = Modifier.height(56.dp)
-                        ) { Text("Save") }
-
-                        TextButton(
-                            onClick = {
-                                vm.cancelEdit()
-                                category = TextFieldValue("")
-                                title = ""
-                                amount = ""
-                                dateTimeChangedManually = false
-                                focus.clearFocus()
-                            },
-                            modifier = Modifier.height(56.dp)
-                        ) { Text("Cancel") }
-                    }
-                }
             }
 
             // Date/time preview + change button
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 val preview = LocalDateTime.of(pickedDate, pickedTime).format(tsFmt)
-                OutlinedTextField(
-                    value = preview,
-                    onValueChange = {},
-                    label = { Text("Date/Time${if (dateTimeChangedManually) " 🛈" else ""}") },
-                    readOnly = true,
-                    modifier = Modifier.weight(1f)
-                )
-                Button(
-                    onClick = { showDatePicker = true },
-                    modifier = Modifier.height(56.dp)
-                ) { Text("Change date/time") }
+
+                Box(
+                    modifier = Modifier.fillMaxWidth(0.8f)
+                ) {
+                    OutlinedTextField(
+                        value = preview,
+                        onValueChange = {},
+                        label = { Text("Date/Time${if (dateTimeChangedManually) " 🛈" else ""}") },
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            IconButton(onClick = { showDatePicker = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit date and time",
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    )
+
+                    // click-through overlay to ensure whole field opens the picker
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) { showDatePicker = true }
+                    )
+                }
             }
+
+            if (editing == null) {
+                Button(
+                    onClick = { addIfValid() },
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .height(56.dp)
+
+                ) { Text("Add") }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                ) {
+
+                Button(
+                        onClick = {
+                            val normalized = amount.replace(',', '.')
+                            val a = normalized.toDoubleOrNull() ?: return@Button
+                            val occurred = LocalDateTime.of(pickedDate, pickedTime)
+                            val currentId = vm.editing.value?.id ?: return@Button
+
+                            val updated = UiTxn(
+                                id = currentId,
+                                occurredAt = occurred,
+                                category = category.text.trim(),
+                                amount = a,
+                                title = title.takeIf { it.isNotBlank() },
+                                manuallySetDateTime = dateTimeChangedManually
+                            )
+
+                            vm.saveEdit(updated)
+                            category = TextFieldValue("")
+                            title = ""
+                            amount = ""
+                            dateTimeChangedManually = false
+                            focus.clearFocus()
+                            pickedDate = LocalDate.now()
+                            pickedTime = LocalTime.now().withSecond(0).withNano(0)
+                        },
+                        modifier = Modifier.height(56.dp)
+                    ) { Text("Save") }
+
+                    TextButton(
+                        onClick = {
+                            vm.cancelEdit()
+                            category = TextFieldValue("")
+                            title = ""
+                            amount = ""
+                            dateTimeChangedManually = false
+                            focus.clearFocus()
+                        },
+                        modifier = Modifier.height(56.dp)
+                    ) { Text("Cancel") }
+                }
+            }
+
 
             HorizontalDivider()
 
@@ -604,34 +641,42 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     }
 
     if (showDatePicker) {
-        AlertDialog(
+        DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    showDatePicker = false
-                    showTimePicker = true
-                }) { Text("Next") }
+                TextButton(
+                    onClick = {
+                        showDatePicker = false
+                        showTimePicker = true
+                    }
+                ) {
+                    Text("Next")
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-            },
-            text = {
-                val state = rememberDatePickerState(
-                    initialSelectedDateMillis = java.time.ZonedDateTime.now().toInstant().toEpochMilli()
-                )
-                DatePicker(state = state)
-                LaunchedEffect(state.selectedDateMillis) {
-                    state.selectedDateMillis?.let { millis ->
-                        val ld = java.time.Instant.ofEpochMilli(millis)
-                            .atZone(java.time.ZoneId.systemDefault())
-                            .toLocalDate()
-                        pickedDate = ld
-                        dateTimeChangedManually = true
-                    }
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
                 }
             }
-        )
+        ) {
+            val state = rememberDatePickerState(
+                initialSelectedDateMillis = java.time.ZonedDateTime.now()
+                    .toInstant()
+                    .toEpochMilli()
+            )
+            DatePicker(state = state)
+            LaunchedEffect(state.selectedDateMillis) {
+                state.selectedDateMillis?.let { millis ->
+                    val ld = java.time.Instant.ofEpochMilli(millis)
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toLocalDate()
+                    pickedDate = ld
+                    dateTimeChangedManually = true
+                }
+            }
+        }
     }
+
 
     if (showTimePicker) {
         AlertDialog(
