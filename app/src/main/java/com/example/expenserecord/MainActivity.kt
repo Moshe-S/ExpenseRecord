@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,11 +20,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Button
@@ -46,6 +51,8 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
@@ -120,6 +128,9 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     var title by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
+    var searchOpen by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
+    var selectedCategories by remember { mutableStateOf(setOf<String>()) }
     var focusedField by remember { mutableStateOf<String?>(null) }
 
     var pickedDate by remember { mutableStateOf(LocalDate.now()) }
@@ -142,16 +153,36 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     val amountFocusRequester = remember { FocusRequester() }
 
     val editing by vm.editing.collectAsState()
+    val listState = rememberLazyListState()
+    var sortNewestFirst by remember { mutableStateOf(true) }
 
-    val filtered = remember(txns, query) {
+    val filtered = remember(txns, query, selectedCategories) {
         val q = query.trim().lowercase()
-        if (q.isEmpty()) txns
-        else txns.filter {
-            it.category.lowercase().contains(q) ||
-                    (it.title ?: "").lowercase().contains(q)
+        val base = if (q.isEmpty()) {
+            txns
+        } else {
+            txns.filter {
+                it.category.lowercase().contains(q) ||
+                        (it.title ?: "").lowercase().contains(q)
+            }
+        }
+
+        if (selectedCategories.isNotEmpty()) {
+            base.filter { it.category in selectedCategories }
+        } else {
+            base
         }
     }
+
     val total = filtered.sumOf { it.amount }
+    val allCategories = remember(txns) { txns.map { it.category }.distinct().sorted() }
+    val displayed = remember(filtered, sortNewestFirst) {
+        if (sortNewestFirst) filtered.sortedByDescending { it.occurredAt }
+        else filtered.sortedBy { it.occurredAt }
+    }
+    LaunchedEffect(sortNewestFirst) {
+        listState.scrollToItem(0)
+    }
 
     fun addIfValid() {
         val normalized = amount.replace(',', '.')
@@ -159,17 +190,20 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
         if (category.text.isBlank() || a == null || a <= 0.0) return
 
         val occurred = LocalDateTime.of(pickedDate, pickedTime)
+        val catN = category.text.trim().lowercase().replaceFirstChar { it.uppercase() }
         val commit: () -> Unit = {
-            vm.add(
+        vm.add(
                 UiTxn(
                     occurredAt = occurred,
-                    category = category.text.trim(),
+                    category = catN,
                     amount = a,
                     title = title.takeIf { it.isNotBlank() },
                     manuallySetDateTime = dateTimeChangedManually
                 )
             )
-            vm.addCategoryToHistory(category.text.trim())
+            val catN = category.text.trim().lowercase().replaceFirstChar { it.titlecase() }
+
+            vm.addCategoryToHistory(catN)
             amount = ""
             title = ""
             focus.clearFocus()
@@ -425,12 +459,13 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             val normalized = amount.replace(',', '.')
                             val a = normalized.toDoubleOrNull() ?: return@Button
                             val occurred = LocalDateTime.of(pickedDate, pickedTime)
+                            val catN = category.text.trim().lowercase().replaceFirstChar { it.uppercase() }
                             val currentId = vm.editing.value?.id ?: return@Button
 
                             val updated = UiTxn(
                                 id = currentId,
                                 occurredAt = occurred,
-                                category = category.text.trim(),
+                                category = catN,
                                 amount = a,
                                 title = title.takeIf { it.isNotBlank() },
                                 manuallySetDateTime = dateTimeChangedManually
@@ -468,21 +503,69 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             HorizontalDivider()
 
             // Search
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text("Search (category or details)") },
-                modifier = Modifier.fillMaxWidth().handleTabNext(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
-            )
+            if (searchOpen) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Search (category or details)") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .handleTabNext(),
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            query = ""
+                            searchOpen = false
+                            focus.clearFocus()
+                        }) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Close search")
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
+                )
+            }
 
-            // Total
-            Text(
-                "Total: ${"%.2f".format(total)}",
-                style = MaterialTheme.typography.titleMedium
-            )
+
+            // Total + actions (Sort | Total | Search)
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(
+                    onClick = {
+                        sortNewestFirst = !sortNewestFirst
+                        scope.launch {
+
+                            val msg = if (sortNewestFirst) "Sorting: Newest first" else "Sorting: Oldest first"
+                            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
+                        }
+                    },
+
+                    modifier = Modifier.align(Alignment.CenterStart)
+                ) {
+                    Text(if (sortNewestFirst) "▼" else "▲", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+
+                }
+                Text(
+                    "Total: ${"%.2f".format(total)}",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Row(
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { showFilterSheet = true }) {
+                        Icon(imageVector = Icons.Filled.FilterList, contentDescription = "Filter")
+                    }
+                    IconButton(onClick = { searchOpen = true }) {
+                        Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
+                    }
+                }
+
+            }
+
 
             // Month controls
             val currentMonth by vm.currentMonth.collectAsState()
@@ -576,9 +659,9 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             var selectedTxn: UiTxn? by remember { mutableStateOf(null) }
 
             // ===== Table rows =====
-            LazyColumn(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
-                items(filtered, key = { it.id }) { t ->
-                    Row(
+            LazyColumn(state = listState, modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
+                items(displayed, key = { it.id }) { t ->
+                Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .combinedClickable(
@@ -700,6 +783,73 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             }
         }
     }
+
+    if (showFilterSheet) {
+        ModalBottomSheet(onDismissRequest = { showFilterSheet = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 460.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+
+            Text("Filter by category", style = MaterialTheme.typography.titleMedium)
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(
+                        onClick = { showFilterSheet = false },
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close"
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { selectedCategories = emptySet() }) { Text("Clear") }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = { showFilterSheet = false }) { Text("Apply") }
+                }
+
+                LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+
+
+                items(allCategories) { cat ->
+                        val checked = cat in selectedCategories
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedCategories = if (checked) selectedCategories - cat else selectedCategories + cat
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = {
+                                    selectedCategories = if (checked) selectedCategories - cat else selectedCategories + cat
+                                }
+                            )
+                            Text(cat, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+
+
+
+
+            }
+        }
+    }
+
 
     if (showDatePicker) {
         DatePickerDialog(
