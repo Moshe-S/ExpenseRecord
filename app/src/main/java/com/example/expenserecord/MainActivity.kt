@@ -170,6 +170,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             focus.clearFocus()
             pickedDate = LocalDate.now()
             pickedTime = LocalTime.now().withSecond(0).withNano(0)
+            scope.launch { snackbarHostState.showSnackbar("Added", duration = SnackbarDuration.Short) }
             dateTimeChangedManually = false
         }
         if (occurred.isAfter(LocalDateTime.now())) {
@@ -199,7 +200,38 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Expense Record") }) },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                androidx.compose.material3.Snackbar(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth(),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = data.visuals.message,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
+                        if (data.visuals.actionLabel != null) {
+                            TextButton(
+                                onClick = { data.performAction() },
+                                modifier = Modifier.align(Alignment.CenterEnd)
+                            ) {
+                                Text(data.visuals.actionLabel!!)
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
     ) { padding ->
         Column(
             Modifier
@@ -385,6 +417,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             )
 
                             vm.saveEdit(updated)
+                            scope.launch { snackbarHostState.showSnackbar("Saved", duration = SnackbarDuration.Short) }
                             category = TextFieldValue("")
                             title = ""
                             amount = ""
@@ -399,6 +432,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     TextButton(
                         onClick = {
                             vm.cancelEdit()
+                            scope.launch { snackbarHostState.showSnackbar("Edit canceled", duration = SnackbarDuration.Short) }
                             category = TextFieldValue("")
                             title = ""
                             amount = ""
@@ -605,7 +639,10 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
-                            IconButton(onClick = { showActionSheet = false }) {
+                            IconButton(onClick = { showActionSheet = false },
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
+                            )
+                            {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Close"
@@ -616,7 +653,9 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         TextButton(onClick = {
                             selectedTxn?.let { vm.beginEdit(it) }
                             showActionSheet = false
-                        }) { Text("Edit") }
+                        },modifier = Modifier.fillMaxWidth().height(48.dp)
+                        )
+                        { Text("Edit") }
 
                         TextButton(onClick = {
                             val deleted = selectedTxn ?: return@TextButton
@@ -633,7 +672,9 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                                     vm.restoreLastDeleted()
                                 }
                             }
-                        }) { Text("Delete") }
+                        }, modifier = Modifier.fillMaxWidth().height(48.dp)
+                        )
+                        { Text("Delete") }
                     }
                 }
             }
