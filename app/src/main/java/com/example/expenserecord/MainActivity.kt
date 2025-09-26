@@ -59,6 +59,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -80,6 +82,8 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
+import com.example.expenserecord.ui.theme.focusHighlight
+import androidx.compose.foundation.layout.fillMaxSize
 
 data class UiTxn(
     val id: Long = 0L,
@@ -135,6 +139,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val amountFocusRequester = remember { FocusRequester() }
 
     val editing by vm.editing.collectAsState()
 
@@ -193,7 +198,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     fun Modifier.handleTabNext(): Modifier =
         this.onPreviewKeyEvent { e ->
             if (e.type == KeyEventType.KeyUp && e.key == Key.Tab) {
-                focus.moveFocus(FocusDirection.Next)
+                amountFocusRequester.requestFocus()
                 true
             } else false
         }
@@ -236,6 +241,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
         Column(
             Modifier
                 .padding(padding)
+                .fillMaxSize()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -243,25 +249,29 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             Column {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(modifier = Modifier.weight(1f)) {
-                        OutlinedTextField(
-                            value = category,
-                            onValueChange = { category = it },
-                            label = { Text("Category") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .handleTabNext()
-                                .onFocusChanged { focusState ->
-                                    focusedField = if (focusState.isFocused) "category" else null
-                                    if (focusState.isFocused) {
-                                        category = category.copy(
-                                            selection = TextRange(0, category.text.length)
-                                        )
-                                    }
-                                },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                            keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) })
-                        )
+                        Box(
+                            modifier = Modifier.focusHighlight(isFocused = (focusedField == "category"))
+                        ) {
+                            OutlinedTextField(
+                                value = category,
+                                onValueChange = { category = it },
+                                label = { Text("Category") },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .handleTabNext()
+                                    .onFocusChanged { focusState ->
+                                        focusedField = if (focusState.isFocused) "category" else null
+                                        if (focusState.isFocused) {
+                                            category = category.copy(
+                                                selection = TextRange(0, category.text.length)
+                                            )
+                                        }
+                                    },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                keyboardActions = KeyboardActions(onNext = { amountFocusRequester.requestFocus() }))
+                        }
+
 
                         val recentCategories by vm.recentCategories.collectAsState()
                         val suggestions = remember(category.text, recentCategories) {
@@ -290,9 +300,10 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable {
-                                                    category = TextFieldValue(categoryName)
-                                                    focusedField = null
-                                                    focus.moveFocus(FocusDirection.Next)
+                                                    focus.clearFocus()
+                                                    category = TextFieldValue(categoryName, selection = TextRange(categoryName.length))
+                                                    amountFocusRequester.requestFocus()
+
                                                 }
                                                 .padding(12.dp)
                                         )
@@ -307,8 +318,12 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         onValueChange = { title = it },
                         label = { Text("Details (optional)") },
                         modifier = Modifier
+                            .focusHighlight(isFocused = (focusedField == "details"))
                             .weight(1f)
-                            .handleTabNext(),
+                            .handleTabNext()
+                            .onFocusChanged { focusState ->
+                                focusedField = if (focusState.isFocused) "details" else null
+                            },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Next) })
@@ -317,7 +332,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             }
 
             // Inputs row 2: Amount + Add/Save/Cancel
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { input ->
@@ -331,14 +346,19 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         }
                     },
                     label = { Text("Amount") },
-                    modifier = Modifier
-                        .weight(1f)
+                    modifier = Modifier.focusHighlight(isFocused = (focusedField == "amount"))
+                        .focusRequester(amountFocusRequester)
+                        .fillMaxWidth(0.33f)
                         .onPreviewKeyEvent { e ->
                             if (
                                 e.type == KeyEventType.KeyUp &&
                                 (e.key == Key.Enter || e.key == Key.NumPadEnter)
                             ) { addIfValid(); true } else false
+                        }
+                        .onFocusChanged { focusState ->
+                            focusedField = if (focusState.isFocused) "amount" else null
                         },
+
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, keyboardType = KeyboardType.Number),
                     keyboardActions = KeyboardActions(onDone = { addIfValid() })
@@ -350,12 +370,12 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             // Date/time preview + change button
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.Center
             ) {
-                val preview = LocalDateTime.of(pickedDate, pickedTime).format(tsFmt)
+            val preview = LocalDateTime.of(pickedDate, pickedTime).format(tsFmt)
 
                 Box(
-                    modifier = Modifier.fillMaxWidth(0.8f)
+                    modifier = Modifier.fillMaxWidth(0.5f)
                 ) {
                     OutlinedTextField(
                         value = preview,
@@ -556,7 +576,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             var selectedTxn: UiTxn? by remember { mutableStateOf(null) }
 
             // ===== Table rows =====
-            LazyColumn {
+            LazyColumn(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
                 items(filtered, key = { it.id }) { t ->
                     Row(
                         modifier = Modifier
