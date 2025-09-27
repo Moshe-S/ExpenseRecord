@@ -592,9 +592,9 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Date",
+                    "Date/Time",
                     modifier = Modifier
-                        .width(54.dp)
+                        .width(96.dp)
                         .padding(horizontal = 6.dp),
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -602,22 +602,11 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 )
                 VSep(20)
 
-                Text(
-                    "Time",
-                    modifier = Modifier
-                        .width(46.dp)
-                        .padding(horizontal = 6.dp),
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip
-                )
-                VSep(20)
 
                 Text(
                     "Category",
                     modifier = Modifier
-                        .weight(38f)
+                        .weight(44f)
                         .padding(horizontal = 6.dp),
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -626,9 +615,9 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 VSep(20)
 
                 Text(
-                    "Spent",
+                "₪",
                     modifier = Modifier
-                        .weight(24f)
+                        .weight(22f)
                         .padding(horizontal = 6.dp),
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Medium,
@@ -676,31 +665,22 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = t.occurredAt.format(dateFmt),
-                            modifier = Modifier
-                                .width(54.dp)
-                                .padding(horizontal = 6.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Clip
-                        )
-                        VSep(28)
+                    Text(
+                        text = "${t.occurredAt.format(dateFmt)}, ${t.occurredAt.format(timeFmt)}",
+                        modifier = Modifier
+                            .width(96.dp)
+                            .padding(horizontal = 6.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip
+                    )
+                    VSep(28)
 
-                        Text(
-                            text = t.occurredAt.format(timeFmt) + if (t.manuallySetDateTime) " 🛈" else "",
-                            modifier = Modifier
-                                .width(46.dp)
-                                .padding(horizontal = 6.dp),
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = TextOverflow.Clip
-                        )
-                        VSep(28)
+
 
                         Text(
                             text = t.category,
                             modifier = Modifier
-                                .weight(38f)
+                                .weight(44f)
                                 .padding(horizontal = 6.dp),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -710,7 +690,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         Text(
                             text = "%.2f".format(t.amount),
                             modifier = Modifier
-                                .weight(24f)
+                                .weight(22f)
                                 .padding(horizontal = 6.dp),
                             textAlign = TextAlign.Center,
                             maxLines = 1,
@@ -721,7 +701,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         Text(
                             text = t.title ?: "",
                             modifier = Modifier
-                                .weight(36f)
+                                .weight(34f)
                                 .padding(horizontal = 6.dp),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
