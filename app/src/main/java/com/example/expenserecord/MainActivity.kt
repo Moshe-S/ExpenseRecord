@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Button
@@ -84,6 +85,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
+import kotlin.math.floor
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -105,12 +109,21 @@ data class UiTxn(
 /** Short vertical separator with fixed height */
 @Composable
 private fun VSep(heightDp: Int = 20) {
+    val sepColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f)
     Box(
         modifier = Modifier
             .padding(horizontal = 8.dp) // breathing room from text
             .width(1.dp)
-            .height(heightDp.dp)
-            .background(Color.Black.copy(alpha = 0.25f))
+            .fillMaxHeight()
+            .drawBehind {
+                val x = floor(size.width / 2f) + 0.5f
+                drawLine(
+                    color = sepColor,
+                    start = Offset(x, 0f),
+                    end = Offset(x, size.height),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
     )
 }
 
@@ -366,7 +379,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             }
 
             // Inputs row 2: Amount + Add/Save/Cancel
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { input ->
@@ -380,9 +393,10 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         }
                     },
                     label = { Text("Amount") },
-                    modifier = Modifier.focusHighlight(isFocused = (focusedField == "amount"))
+                    modifier = Modifier
+                        .focusHighlight(isFocused = (focusedField == "amount"))
                         .focusRequester(amountFocusRequester)
-                        .fillMaxWidth(0.33f)
+                        .weight(0.4f)
                         .onPreviewKeyEvent { e ->
                             if (
                                 e.type == KeyEventType.KeyUp &&
@@ -392,25 +406,13 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         .onFocusChanged { focusState ->
                             focusedField = if (focusState.isFocused) "amount" else null
                         },
-
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, keyboardType = KeyboardType.Number),
                     keyboardActions = KeyboardActions(onDone = { addIfValid() })
                 )
 
-
-            }
-
-            // Date/time preview + change button
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-            val preview = LocalDateTime.of(pickedDate, pickedTime).format(tsFmt)
-
-                Box(
-                    modifier = Modifier.fillMaxWidth(0.5f)
-                ) {
+                val preview = LocalDateTime.of(pickedDate, pickedTime).format(tsFmt)
+                Box(modifier = Modifier.weight(0.6f)) {
                     OutlinedTextField(
                         value = preview,
                         onValueChange = {},
@@ -427,8 +429,6 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             }
                         }
                     )
-
-                    // click-through overlay to ensure whole field opens the picker
                     Box(
                         modifier = Modifier
                             .matchParentSize()
@@ -446,15 +446,13 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .height(56.dp)
-
                 ) { Text("Add") }
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
                 ) {
-
-                Button(
+                    Button(
                         onClick = {
                             val normalized = amount.replace(',', '.')
                             val a = normalized.toDoubleOrNull() ?: return@Button
@@ -499,7 +497,6 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 }
             }
 
-
             HorizontalDivider()
 
             // Search
@@ -536,17 +533,35 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     onClick = {
                         sortNewestFirst = !sortNewestFirst
                         scope.launch {
-
                             val msg = if (sortNewestFirst) "Sorting: Newest first" else "Sorting: Oldest first"
                             snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
                         }
                     },
-
                     modifier = Modifier.align(Alignment.CenterStart)
                 ) {
-                    Text(if (sortNewestFirst) "▼" else "▲", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "▲",
+                            fontSize = 22.sp,
+                            fontWeight = if (sortNewestFirst) FontWeight.Bold else FontWeight.Normal,
+                            color = if (sortNewestFirst)
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                        )
+                        Text(
+                            text = "▲",
+                            fontSize = 22.sp,
+                            fontWeight = if (!sortNewestFirst) FontWeight.Bold else FontWeight.Normal,
+                            color = if (!sortNewestFirst)
+                                MaterialTheme.colorScheme.onSurface
+                            else
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                            modifier = Modifier.padding(start = 0.dp).scale(scaleX = 1f, scaleY = -1f)
+                        )
+                    }
                 }
+
                 Text(
                     "Total: ${"%.2f".format(total)}",
                     style = MaterialTheme.typography.titleMedium
@@ -588,7 +603,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 6.dp),
+                    .height(IntrinsicSize.Min),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -607,8 +622,8 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     "Category",
                     modifier = Modifier
                         .weight(44f)
-                        .padding(horizontal = 6.dp),
-                    fontWeight = FontWeight.Medium,
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                            fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -618,7 +633,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 "₪",
                     modifier = Modifier
                         .weight(22f)
-                        .padding(horizontal = 6.dp),
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -629,8 +644,8 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 Text(
                     "Details",
                     modifier = Modifier
-                        .weight(36f)
-                        .padding(horizontal = 6.dp),
+                        .weight(34f)
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -653,6 +668,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .height(IntrinsicSize.Min)
                             .combinedClickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
@@ -661,15 +677,14 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                                     selectedTxn = t
                                     showActionSheet = true
                                 }
-                            )
-                            .padding(vertical = 6.dp),
+                            ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                     Text(
                         text = "${t.occurredAt.format(dateFmt)}, ${t.occurredAt.format(timeFmt)}",
                         modifier = Modifier
                             .width(96.dp)
-                            .padding(horizontal = 6.dp),
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
                         maxLines = 1,
                         overflow = TextOverflow.Clip
                     )
@@ -681,7 +696,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             text = t.category,
                             modifier = Modifier
                                 .weight(44f)
-                                .padding(horizontal = 6.dp),
+                                .padding(horizontal = 6.dp, vertical = 6.dp),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -691,7 +706,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             text = "%.2f".format(t.amount),
                             modifier = Modifier
                                 .weight(22f)
-                                .padding(horizontal = 6.dp),
+                                .padding(horizontal = 6.dp, vertical = 6.dp),
                             textAlign = TextAlign.Center,
                             maxLines = 1,
                             overflow = TextOverflow.Clip
@@ -702,7 +717,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             text = t.title ?: "",
                             modifier = Modifier
                                 .weight(34f)
-                                .padding(horizontal = 6.dp),
+                                .padding(horizontal = 6.dp, vertical = 6.dp),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
