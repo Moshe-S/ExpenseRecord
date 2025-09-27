@@ -24,6 +24,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -97,6 +100,7 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import com.example.expenserecord.ui.theme.focusHighlight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
 
 data class UiTxn(
     val id: Long = 0L,
@@ -459,7 +463,8 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .height(56.dp)
-                ) { Text("Add") }
+                        .widthIn(min = 150.dp)
+                ) { Text("Add", fontSize = 18.sp) }
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -833,7 +838,13 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     Button(onClick = { showFilterSheet = false }) { Text("Apply") }
                 }
 
-                LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+
 
 
                 items(allCategories) { cat ->
