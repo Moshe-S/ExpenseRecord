@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -420,7 +421,12 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         readOnly = true,
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
-                            IconButton(onClick = { showDatePicker = true }) {
+                            IconButton(onClick = {
+                                focusedField = null
+                                focus.clearFocus()
+                                showDatePicker = true
+                            })
+                            {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Edit date and time",
@@ -435,7 +441,14 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             .clickable(
                                 indication = null,
                                 interactionSource = remember { MutableInteractionSource() }
-                            ) { showDatePicker = true }
+
+                            )
+                            {
+                                focusedField = null
+                                focus.clearFocus()
+                                showDatePicker = true
+                            }
+
                     )
                 }
             }
@@ -664,7 +677,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
             // ===== Table rows =====
             LazyColumn(state = listState, modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
-                items(displayed, key = { it.id }) { t ->
+                itemsIndexed(displayed, key = { _, it -> it.id }) { index, t ->
                 Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -677,7 +690,14 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                                     selectedTxn = t
                                     showActionSheet = true
                                 }
+                            )
+                            .background(
+                                if (index % 2 == 1)
+                                    Color(0xFFEFF3F6).copy(alpha = 0.85f)
+                                else
+                                    Color.Transparent
                             ),
+
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                     Text(
@@ -853,6 +873,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                 TextButton(
                     onClick = {
                         showDatePicker = false
+                        focusedField = null
                         showTimePicker = true
                     }
                 ) {
