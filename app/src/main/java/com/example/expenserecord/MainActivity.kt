@@ -101,6 +101,8 @@ import kotlinx.coroutines.launch
 import com.example.expenserecord.ui.theme.focusHighlight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.ViewWeek
 
 data class UiTxn(
     val id: Long = 0L,
@@ -171,6 +173,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     val amountFocusRequester = remember { FocusRequester() }
 
     val editing by vm.editing.collectAsState()
+    val viewMode by vm.viewMode.collectAsState()
     val listState = rememberLazyListState()
     var sortNewestFirst by remember { mutableStateOf(true) }
 
@@ -542,41 +545,68 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             }
 
 
-            // Total + actions (Sort | Total | Search)
+// Total + actions (Sort | Total | Search)
             Box(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                IconButton(
-                    onClick = {
-                        sortNewestFirst = !sortNewestFirst
-                        scope.launch {
-                            val msg = if (sortNewestFirst) "Sorting: Newest first" else "Sorting: Oldest first"
-                            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
-                        }
-                    },
-                    modifier = Modifier.align(Alignment.CenterStart)
+                Row(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp) // was 8.dp
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "▲",
-                            fontSize = 22.sp,
-                            fontWeight = if (sortNewestFirst) FontWeight.Bold else FontWeight.Normal,
-                            color = if (sortNewestFirst)
-                                MaterialTheme.colorScheme.onSurface
-                            else
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                    IconButton(
+                        onClick = {
+                            sortNewestFirst = !sortNewestFirst
+                            scope.launch {
+                                val msg = if (sortNewestFirst) "Sorting: Newest first" else "Sorting: Oldest first"
+                                snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
+                            }
+                        }
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "▲",
+                                fontSize = 22.sp,
+                                fontWeight = if (sortNewestFirst) FontWeight.Bold else FontWeight.Normal,
+                                color = if (sortNewestFirst)
+                                    MaterialTheme.colorScheme.onSurface
+                                else
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                            )
+                            Text(
+                                text = "▲",
+                                fontSize = 22.sp,
+                                fontWeight = if (!sortNewestFirst) FontWeight.Bold else FontWeight.Normal,
+                                color = if (!sortNewestFirst)
+                                    MaterialTheme.colorScheme.onSurface
+                                else
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                                modifier = Modifier.padding(start = 0.dp).scale(scaleX = 1f, scaleY = -1f)
+                            )
+                        }
+                    }
+
+                    TextButton(onClick = {
+                        vm.setViewMode(
+                            if (viewMode == TxnViewModel.ViewMode.MONTH) TxnViewModel.ViewMode.WEEK
+                            else TxnViewModel.ViewMode.MONTH
                         )
-                        Text(
-                            text = "▲",
-                            fontSize = 22.sp,
-                            fontWeight = if (!sortNewestFirst) FontWeight.Bold else FontWeight.Normal,
-                            color = if (!sortNewestFirst)
-                                MaterialTheme.colorScheme.onSurface
-                            else
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                            modifier = Modifier.padding(start = 0.dp).scale(scaleX = 1f, scaleY = -1f)
-                        )
+                    }) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = if (viewMode == TxnViewModel.ViewMode.WEEK)
+                                    Icons.Filled.ViewWeek
+                                else
+                                    Icons.Filled.DateRange,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = if (viewMode == TxnViewModel.ViewMode.WEEK) "Week" else "Month",
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
 
@@ -596,7 +626,6 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
                     }
                 }
-
             }
 
 
