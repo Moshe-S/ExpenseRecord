@@ -103,6 +103,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.ViewWeek
+import androidx.core.view.WindowInsetsControllerCompat
 
 data class UiTxn(
     val id: Long = 0L,
@@ -137,6 +138,8 @@ private fun VSep(heightDp: Int = 20) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = android.graphics.Color.BLACK
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
         setContent { BudgetScreen() }
     }
 }
@@ -459,15 +462,33 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     )
                 }
             }
-
             if (editing == null) {
-                Button(
-                    onClick = { addIfValid() },
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .height(56.dp)
-                        .widthIn(min = 150.dp)
-                ) { Text("Add", fontSize = 18.sp) }
+                Box(Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { addIfValid() },
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .height(56.dp)
+                            .widthIn(min = 150.dp)
+                    ) { Text("Add", fontSize = 18.sp) }
+
+                    if (focusedField != null) {
+                        Row(Modifier.align(Alignment.CenterEnd)) {
+                            TextButton(
+                                onClick = {
+                                    category = TextFieldValue("")
+                                    title = ""
+                                    amount = ""
+                                    dateTimeChangedManually = false
+                                    pickedDate = LocalDate.now()
+                                    pickedTime = LocalTime.now().withSecond(0).withNano(0)
+                                    focus.clearFocus()
+                                },
+                                modifier = Modifier.height(56.dp)
+                            ) { Text("Cancel") }
+                        }
+                    }
+                }
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
