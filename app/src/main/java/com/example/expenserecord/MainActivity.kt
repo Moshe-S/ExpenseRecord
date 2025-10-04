@@ -520,15 +520,24 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
             HorizontalDivider()
 
-            // Search
+// Search
+            val searchFocusRequester = remember { FocusRequester() }
+
             if (searchOpen) {
+                LaunchedEffect(searchOpen) {
+                    if (searchOpen) {
+                        searchFocusRequester.requestFocus()
+                    }
+                }
+
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
                     label = { Text("Search (category or details)") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .handleTabNext(),
+                        .handleTabNext()
+                        .focusRequester(searchFocusRequester),
                     singleLine = true,
                     trailingIcon = {
                         IconButton(onClick = {
@@ -560,6 +569,10 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                             sortNewestFirst = !sortNewestFirst
                             scope.launch {
                                 val msg = if (sortNewestFirst) "Sorting: Newest first" else "Sorting: Oldest first"
+                                val current = snackbarHostState.currentSnackbarData
+                                if (current?.visuals?.message?.startsWith("Sorting:") == true) {
+                                    current.dismiss()
+                                }
                                 snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
                             }
                         }
