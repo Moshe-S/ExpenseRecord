@@ -103,6 +103,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.ViewWeek
+import androidx.compose.material3.OutlinedButton
 import androidx.core.view.WindowInsetsControllerCompat
 
 data class UiTxn(
@@ -474,7 +475,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
                     if (focusedField != null) {
                         Row(Modifier.align(Alignment.CenterEnd)) {
-                            TextButton(
+                            OutlinedButton(
                                 onClick = {
                                     category = TextFieldValue("")
                                     title = ""
@@ -896,7 +897,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = { selectedCategories = emptySet() }) { Text("Clear") }
+                    OutlinedButton(onClick = { selectedCategories = emptySet() }) { Text("Clear") }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(onClick = { showFilterSheet = false }) { Text("Apply") }
                 }
