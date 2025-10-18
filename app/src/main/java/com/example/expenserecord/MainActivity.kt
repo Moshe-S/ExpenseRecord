@@ -105,6 +105,10 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.ViewWeek
 import androidx.compose.material3.OutlinedButton
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material.icons.filled.MoreVert
 
 data class UiTxn(
     val id: Long = 0L,
@@ -176,8 +180,23 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     val scope = rememberCoroutineScope()
     val amountFocusRequester = remember { FocusRequester() }
 
+    // Top menu (overflow)
+    var showTopMenu by remember { mutableStateOf(false) }
+
+
+    // CSV Export: state and launcher (step 1)
+    var showExportSheet by remember { mutableStateOf(false) }
+
+
+
+    var selectedMonths by remember { mutableStateOf(setOf<MonthKey>()) }
+
+    val createCsvLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { /* no-op for step 1 */ }
+
     val editing by vm.editing.collectAsState()
     val viewMode by vm.viewMode.collectAsState()
+    val monthsWithData by vm.monthsWithDataAll.collectAsState()
     val listState = rememberLazyListState()
     var sortNewestFirst by remember { mutableStateOf(true) }
 
@@ -263,7 +282,32 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
         }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Expense Record") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Expense Record") },
+                actions = {
+                    IconButton(onClick = { showTopMenu = true }) {
+                        Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More")
+                    }
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = showTopMenu,
+                        onDismissRequest = { showTopMenu = false }
+                    ) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = {
+                                OutlinedButton(
+                                    onClick = {
+                                        showTopMenu = false
+                                        showExportSheet = true
+                                    }
+                                ) { Text("Export CSV") }
+                            },
+                            onClick = { /* handled by the button */ }
+                        )
+                    }
+                }
+            )
+        },
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { data ->
                 androidx.compose.material3.Snackbar(
@@ -940,6 +984,74 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
         }
     }
 
+// ===== Export Sheet (select months) =====
+    if (showExportSheet) {
+        ModalBottomSheet(onDismissRequest = { showExportSheet = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 460.dp)
+                    .padding(16.dp)
+                    .padding(bottom = 24.dp), // ensure footer buttons are fully visible
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            )
+            {
+                Text("Export – Select months", style = MaterialTheme.typography.titleMedium)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(onClick = { selectedMonths = monthsWithData.toSet() }) { Text("Select all") }
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedButton(onClick = { selectedMonths = emptySet() }) { Text("Clear") }
+                }
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(monthsWithData) { mk ->
+                        val checked = mk in selectedMonths
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedMonths = if (checked) selectedMonths - mk else selectedMonths + mk
+                                }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = {
+                                    selectedMonths = if (checked) selectedMonths - mk else selectedMonths + mk
+                                }
+                            )
+                            Text(monthKeyLabel(mk), modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(onClick = { showExportSheet = false }) { Text("Cancel") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            // next step: biometric + CreateDocument
+                            showExportSheet = false
+                        },
+                        enabled = selectedMonths.isNotEmpty()
+                    ) { Text("Next") }
+                }
+            }
+        }
+    }
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -1011,4 +1123,12 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
             text = { Text("Selected time (${whenPicked.format(tsFmt)}) is in the future. Are you sure?") }
         )
     }
+}
+
+// CSV export
+data class MonthKey(val year: Int, val month: Int)
+private fun monthKeyLabel(mk: MonthKey): String {
+    val ym = java.time.YearMonth.of(mk.year, mk.month)
+    val monthName = ym.month.name.lowercase().replaceFirstChar { it.titlecase() }
+    return "$monthName ${ym.year}"
 }

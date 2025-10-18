@@ -138,6 +138,11 @@ class TxnViewModel : ViewModel() {
         .flatMapLatest { it }
         .map { list -> list.map { it.toUi() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Distinct months across all rows (not tied to currentRange)
+    val monthsWithDataAll =
+        dao.getMonthsWithData()
+            .map { list -> list.map { MonthKey(it.year, it.month) } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val recentCategories = categoryDao.getRecentCategories()
         .map { list -> list.map { it.name } }
