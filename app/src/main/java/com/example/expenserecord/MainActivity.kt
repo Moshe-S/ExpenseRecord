@@ -178,6 +178,7 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val amountFocusRequester = remember { FocusRequester() }
 
     // Top menu (overflow)
@@ -192,7 +193,49 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
     var selectedMonths by remember { mutableStateOf(setOf<MonthKey>()) }
 
     val createCsvLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { /* no-op for step 1 */ }
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+            if (uri == null) {
+                scope.launch { snackbarHostState.showSnackbar("Export canceled", duration = SnackbarDuration.Short) }
+                return@rememberLauncherForActivityResult
+            }
+            runCatching {
+                appContext.contentResolver.openOutputStream(uri)?.use { os ->
+                    // Header
+                    val header = "Date,Amount,Category,Details,RowNumber\n"
+                    os.write(header.toByteArray())
+
+                    // Prepare rows from selected months
+                    fun esc(s: String?): String {
+                        if (s == null) return ""
+                        val body = s.replace("\"", "\"\"")
+                        val needsQuote = body.any { it == ',' || it == '"' || it == '\n' || it == '\r' }
+                        return if (needsQuote) "\"$body\"" else body
+                    }
+
+                    val rows = buildString {
+                        val chosen = txns.filter { t ->
+                            val mk = MonthKey(t.occurredAt.year, t.occurredAt.monthValue)
+                            mk in selectedMonths
+                        }
+                        chosen.forEachIndexed { idx, t ->
+                            append(tsFmt.format(t.occurredAt)); append(',')
+                            append(String.format(java.util.Locale.US, "%.2f", t.amount)); append(',')
+                            append(esc(t.category)); append(',')
+                            append(esc(t.title)); append(',')
+                            append(idx + 1); append('\n')
+                        }
+                    }
+
+                    os.write(rows.toByteArray())
+                    os.flush()
+                } ?: error("Cannot open stream")
+            }.onSuccess {
+                scope.launch { snackbarHostState.showSnackbar("CSV created", duration = SnackbarDuration.Short) }
+            }.onFailure {
+                scope.launch { snackbarHostState.showSnackbar("Export failed", duration = SnackbarDuration.Long) }
+            }
+        }
+
 
     val editing by vm.editing.collectAsState()
     val viewMode by vm.viewMode.collectAsState()
@@ -1043,8 +1086,13 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                     Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = {
-                            // next step: biometric + CreateDocument
                             showExportSheet = false
+                            if (selectedMonths.isNotEmpty()) {
+                                val suggested = "ExpenseRecord-" +
+                                        LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmm")) +
+                                        ".csv"
+                                createCsvLauncher.launch(suggested)
+                            }
                         },
                         enabled = selectedMonths.isNotEmpty()
                     ) { Text("Next") }
