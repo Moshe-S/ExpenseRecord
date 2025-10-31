@@ -194,17 +194,15 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
 
     val createCsvLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
-            if (uri == null) {
-                scope.launch { snackbarHostState.showSnackbar("Export canceled", duration = SnackbarDuration.Short) }
-                return@rememberLauncherForActivityResult
-            }
-            runCatching {
-                appContext.contentResolver.openOutputStream(uri)?.use { os ->
-                    // Header
-                    val header = "Date,Amount,Category,Details,RowNumber\n"
-                    os.write(header.toByteArray())
-
-                    // Prepare rows from selected months
+            scope.launch {
+                if (uri == null) {
+                    snackbarHostState.showSnackbar("Export canceled", duration = SnackbarDuration.Short)
+                    return@launch
+                }
+                val result = runCatching {
+                    // 1) Fetch data for all selected months from the ViewModel
+                    val chosen: List<UiTxn> = vm.getTxnsForMonths(selectedMonths)
+                    // 2) Build CSV text
                     fun esc(s: String?): String {
                         if (s == null) return ""
                         val body = s.replace("\"", "\"\"")
@@ -212,27 +210,30 @@ fun BudgetScreen(vm: TxnViewModel = viewModel()) {
                         return if (needsQuote) "\"$body\"" else body
                     }
 
-                    val rows = buildString {
-                        val chosen = txns.filter { t ->
-                            val mk = MonthKey(t.occurredAt.year, t.occurredAt.monthValue)
-                            mk in selectedMonths
-                        }
-                        chosen.forEachIndexed { idx, t ->
-                            append(tsFmt.format(t.occurredAt)); append(',')
-                            append(String.format(java.util.Locale.US, "%.2f", t.amount)); append(',')
-                            append(esc(t.category)); append(',')
-                            append(esc(t.title)); append(',')
-                            append(idx + 1); append('\n')
-                        }
+                    val sb = StringBuilder()
+                    sb.append("Date,Amount,Category,Details,RowNumber\n")
+                    chosen.forEachIndexed { idx, t ->
+                        sb.append(tsFmt.format(t.occurredAt)).append(',')
+                        sb.append(String.format(java.util.Locale.US, "%.2f", t.amount)).append(',')
+                        sb.append(esc(t.category)).append(',')
+                        sb.append(esc(t.title)).append(',')
+                        sb.append(idx + 1).append('\n')
                     }
+                    val bytes = sb.toString().toByteArray()
 
-                    os.write(rows.toByteArray())
-                    os.flush()
-                } ?: error("Cannot open stream")
-            }.onSuccess {
-                scope.launch { snackbarHostState.showSnackbar("CSV created", duration = SnackbarDuration.Short) }
-            }.onFailure {
-                scope.launch { snackbarHostState.showSnackbar("Export failed", duration = SnackbarDuration.Long) }
+                    // 3) Write to file off the main thread
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        appContext.contentResolver.openOutputStream(uri)?.use { os ->
+                            os.write(bytes)
+                            os.flush()
+                        } ?: error("Cannot open stream")
+                    }
+                }
+                result.onSuccess {
+                    snackbarHostState.showSnackbar("CSV created", duration = SnackbarDuration.Short)
+                }.onFailure {
+                    snackbarHostState.showSnackbar("Export failed", duration = SnackbarDuration.Long)
+                }
             }
         }
 

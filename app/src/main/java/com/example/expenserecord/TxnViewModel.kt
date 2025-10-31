@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime
@@ -158,6 +159,20 @@ class TxnViewModel : ViewModel() {
             )
             categoryDao.insertOrUpdate(categoryEntity)
         }
+    }
+
+    /** Returns all transactions for the given months, independent of the current view. */
+    suspend fun getTxnsForMonths(months: Set<MonthKey>): List<UiTxn> {
+        val all = mutableListOf<UiTxn>()
+        for (mk in months) {
+            val ym = java.time.YearMonth.of(mk.year, mk.month)
+            val start = ym.atDay(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val end = ym.atEndOfMonth().atTime(23, 59, 59, 999_999_999)
+                .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val list = dao.getByDateRange(start, end).first().map { it.toUi() }
+            all += list
+        }
+        return all.sortedByDescending { it.occurredAt }
     }
 
     // ----- Editing state -----
