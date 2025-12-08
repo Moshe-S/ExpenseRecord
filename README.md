@@ -4,7 +4,7 @@
 A fully offline expense tracking application, designed with an emphasis on simplicity, privacy, and streamlined daily use.
 
 ## Key Features
-- **Expense Management**: Add, edit, and delete records, with undo function for deletions.
+- **Expense Tracking**: Add, edit, and delete records, with undo function for deletions.
 - **Date and Time: Automatic stamping with manual selection; confirmation prompt for future dates.**
 - **Categories**: Auto-completion mechanism prevents duplicate category creation.
 - **Views**: Selectable display views by month or week, dynamically updating the total expenses shown.
